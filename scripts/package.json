@@ -1,0 +1,14 @@
+{
+  "type": "commonjs",
+  "scripts": {
+    "pregenerateMessages": "tsc generateMessages.ts",
+    "generateMessages": "node generateMessages.js"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^16.2.5",
+    "@types/node-fetch": "^2.5.7",
+    "jsdom": "^16.4.0",
+    "node-fetch": "^2.6.1",
+    "typescript": "^4.1.0-dev.20201030"
+  }
+}
