@@ -1,7 +1,7 @@
 {
   "type": "commonjs",
   "scripts": {
-    "pregenerateMessages": "tsc generateMessages.ts",
+    "pregenerateMessages": "tsc -p .",
     "generateMessages": "node generateMessages.js"
   },
   "devDependencies": {
