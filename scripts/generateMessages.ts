@@ -1,5 +1,9 @@
 import fetch from "node-fetch";
 import { JSDOM } from "jsdom";
+import * as path from "path";
+import { promises as fs } from "fs";
+
+const DEBUG = process.env.NODE_ENV !== "production";
 
 interface MSG {
   raw: string;
@@ -97,7 +101,9 @@ function toType({ command, params = "", name }: MSG): string {
 async function main() {
   const resp = await fetch("https://tools.ietf.org/html/rfc1459");
   const html = await resp.text();
-  //console.log(html);
+  if (DEBUG) {
+    fs.writeFile("./rfc.html", html);
+  }
 
   const { window } = new JSDOM(html);
   const pages: HTMLPreElement[] = window.document.querySelectorAll(
@@ -120,17 +126,17 @@ async function main() {
           break;
         case "SPAN":
           if (
-            e.textContent.startsWith("4.") ||
-            e.textContent.startsWith("5.")
+            e.textContent!.startsWith("4.") ||
+            e.textContent!.startsWith("5.")
           ) {
-            current = e.textContent;
+            current = e.textContent!;
           }
 
-          if (e.textContent.startsWith("6.")) {
+          if (e.textContent!.startsWith("6.")) {
             current = "replies";
           }
 
-          if (e.textContent.startsWith("6.3")) {
+          if (e.textContent!.startsWith("6.3")) {
             current = "";
           }
           //@ts-ignore
@@ -144,8 +150,9 @@ async function main() {
           // }
           break;
         default:
-          //@ts-ignore
-          console.log(e, e.nodeName, e.textContent, e.className);
+          if (DEBUG)
+            //@ts-ignore
+            console.log(e, e.nodeName, e.textContent, e.className);
       }
     }
   }
@@ -153,7 +160,7 @@ async function main() {
   const messages = Object.values(messagesDict);
 
   const reCommand = /Command: (?<command>\w+)/;
-  const reParams = /Parameters: (?<params>[^\n]+)/;
+  const reParams = /Parameters: (?<params>[^]+?)(\n\n|$)/;
 
   for (const msg of messages) {
     const { command } = msg.raw.match(reCommand)?.groups ?? {};
@@ -162,65 +169,66 @@ async function main() {
     //console.log(msg, command, params);
 
     msg.command = command;
-    msg.params = params;
+    msg.params = params?.replace(/\s+/g, " ").trim();
     msg.doc = (msg.raw.split(params)[1] ?? msg.raw)
       .trim()
       .replace(/\n{3,}/g, "\n\n");
   }
 
-  import("fs").then(fs => {
-    fs.promises.writeFile("./messages.json", JSON.stringify(messages, null, 2));
+  // fs.writeFile("./messages.json", JSON.stringify(messages, null, 2));
 
-    fs.promises.writeFile(
-      "./messages.txt",
-      messages.map(m => m.doc).join("\n")
-    );
+  // fs.writeFile("./messages.txt", messages.map(m => m.doc).join("\n"));
 
-    let ts = `import type { Message as M } from "../src/message.js";\n`;
+  let ts = `import type { Message as M } from "../message.js";\n`;
 
-    const [{ raw: repliesStr }] = messages.splice(-1, 1);
-    // console.log(repliesStr);
+  const [{ raw: repliesStr }] = messages.splice(-1, 1);
+  // console.log(repliesStr);
 
-    const replies = repliesStr.matchAll(
-      /(?<code>\d+)\s*(?<command>[\w_]+)\s*"(?<params>[^"]+)"(\s*- (?<doc>[^]*?)(?= {8}\d))?/g
-    );
-    for (const reply of replies) {
-      const msg: MSG = {
-        raw: "",
-        command: reply.groups.code,
-        name: reply.groups.command,
-        params: reply.groups.params
-          ?.replace(/(\\\n)/g, " ")
-          ?.replace(/(\s+)/g, " ")
-          ?.trim(),
-        doc: reply.groups.doc
-      };
-      messages.push(msg);
+  const replies = repliesStr.matchAll(
+    /(?<code>\d+)\s*(?<command>[\w_]+)\s*"(?<params>[^"]+)"(\s*- (?<doc>[^]*?)(?= {8}\d))?/g
+  );
+  for (const reply of replies) {
+    if (!reply.groups) continue;
+    const msg: MSG = {
+      raw: "",
+      command: reply.groups.code,
+      name: reply.groups.command,
+      params: reply.groups.params
+        ?.replace(/(\\\n)/g, " ")
+        ?.replace(/\s+/g, " ")
+        ?.trim(),
+      doc: reply.groups.doc
+        ?.replace(/\n{3,}/g, "\n\n")
+        ?.replace(/\n {3,}/g, "\n   ")
+        ?.trim()
+    };
+    messages.push(msg);
+  }
+
+  for (const msg of messages) {
+    ts += `/**\n`;
+    const parts = [`Command: \`${msg.command}\``];
+    if (msg.params) {
+      parts.push(`Parameters: \`${msg.params}\``);
     }
-
-    for (const msg of messages) {
-      ts += `/**\n`;
-      const parts = [`Command: ${msg.command}`];
-      if (msg.params) {
-        parts.push(`Parameters: ${msg.params}`);
-      }
-      if (msg.doc) {
-        parts.push(msg.doc.replace(/\n{3,}/g, "\n\n"));
-      }
-      ts += parts.join("\n\n");
-      ts += `\n*/\n`;
-      ts += toType(msg);
-      ts += "\n\n";
+    if (msg.doc) {
+      parts.push(msg.doc);
     }
+    ts += parts.join("\n\n");
+    ts += `\n*/\n`;
+    ts += toType(msg);
+    ts += "\n\n";
+  }
 
-    const union = messages
-      .map(m => m.name ?? m.command)
-      .filter(Boolean)
-      .join("|");
-    ts += `type _ = ${union};\nexport default _;\n`;
-
-    fs.promises.writeFile("./messages.d.ts", ts);
-  });
+  const union = messages
+    .map(m => m.name ?? m.command)
+    .filter(Boolean)
+    .join("|");
+  ts += `type _ = ${union};\nexport default _;\n`;
+  fs.writeFile(
+    path.join(__dirname, "..", "src", "messages", "generated.d.ts"),
+    ts
+  );
 }
 
 main();
