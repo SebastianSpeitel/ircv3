@@ -7,10 +7,16 @@
   "scripts": {
     "prestart": "npm run build --silent",
     "start": "node dist/index.js",
-    "build": "tsc -p ."
+    "build": "tsc -p .",
+    "build:scripts": "tsc -p scripts",
+    "pregeneratemessagetypes": "npm run build:scripts --silent",
+    "generatemessagetypes": "node scripts/generateMessages.js"
   },
   "devDependencies": {
     "@types/node": "^14.11.8",
+    "jsdom": "^16.4.0",
+    "node-fetch": "^2.6.1",
+    "ts-node": "^9.0.0",
     "typescript": "^4.1.0-dev.20201023"
   }
 }
