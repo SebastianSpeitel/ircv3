@@ -206,6 +206,8 @@ async function main() {
   }
 
   for (const msg of messages) {
+    if (!msg.command) continue;
+
     ts += `/**\n`;
     const parts = [`Command: \`${msg.command}\``];
     if (msg.params) {
