@@ -228,7 +228,7 @@ async function main() {
     .join("|");
   ts += `type _ = ${union};\nexport default _;\n`;
   fs.writeFile(
-    path.join(__dirname, "..", "src", "messages", "generated.d.ts"),
+    path.join(__dirname, "..", "src", "messages", "generated.ts"),
     ts
   );
 }
