@@ -2,7 +2,7 @@
   "private": true,
   "name": "@sebastianspeitel/irc",
   "version": "0.0.1",
-  "type": "module",
+  "type": "commonjs",
   "main": "dist/index.js",
   "scripts": {
     "prestart": "npm run build --silent",

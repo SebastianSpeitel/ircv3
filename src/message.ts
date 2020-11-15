@@ -102,7 +102,7 @@ const SParams: ParseState = {
 SCommand[" "] = SParams;
 SParams[" "] = SParams;
 
-function parse(message: string): Message {
+export function parse(message: string): Message {
   const msg: Message & { tags: Record<string, string> } = Object.create(null);
   msg.tags = Object.create(null);
   msg.params = [];

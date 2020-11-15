@@ -1,4 +1,98 @@
 import * as IRC from "./index.js";
+import { parse, parseMessage, ParseState } from "./parser.js";
+
+export function parseEmotes(msg: PRIVMSG) {
+  const emoteString = msg.tags?.emotes;
+  let message = msg.params[1];
+  if (emoteString === undefined) {
+    throw TypeError(`Can't parse emotes of ${msg}.`);
+  }
+  // <emote ID>:<first index>-<last index>,<another first index>-<another last index>/<another emote ID>:<first index>-<last index>...
+
+  let Id: ParseState;
+  let FirstIndex: ParseState;
+  let LastIndex: ParseState;
+
+  interface Emote {
+    id: number;
+    first: number;
+    last: number;
+  }
+
+  const emotes = new Map<number, Emote>();
+  let id = "";
+  let firstIndex = "";
+  let lastIndex = "";
+
+  function addEmote() {
+    const _id = +id;
+    const first = +firstIndex;
+    const last = +lastIndex;
+    emotes.set(first, { id: _id, first, last });
+  }
+
+  Id = (str, i) => {
+    if (str[i] === ":") {
+      return [FirstIndex, i + 1];
+    }
+    id += str[i];
+    return [Id, i + 1];
+  };
+
+  FirstIndex = (str, i) => {
+    if (str[i] === "-") {
+      return [LastIndex, i + 1];
+    }
+    firstIndex += str[i];
+    return [FirstIndex, i + 1];
+  };
+
+  LastIndex = (str, i) => {
+    if (str[i] === ",") {
+      addEmote();
+      firstIndex = "";
+      lastIndex = "";
+      return [FirstIndex, i + 1];
+    }
+
+    if (str[i] === "/") {
+      addEmote();
+      id = "";
+      firstIndex = "";
+      lastIndex = "";
+      return [Id, i + 1];
+    }
+    lastIndex += str[i];
+    return [LastIndex, i + 1];
+  };
+
+  parse(emoteString, Id);
+  if (id) addEmote();
+
+  // console.log(emotes);
+
+  const parsed: (string | { id: number; raw: string })[] = [];
+  let raw = "";
+  let i = 0;
+  const len = message.length;
+
+  do {
+    let emote: Emote | undefined;
+    while (!(emote = emotes.get(i)) && i < len) {
+      raw += message[i++];
+    }
+    if (!emote) {
+      parsed.push(raw);
+      break;
+    }
+    const { id, last } = emote;
+    parsed.push(raw, { id, raw: message.substring(i, last + 1) });
+    i = last + 1;
+    raw = "";
+  } while (i < len);
+
+  return parsed;
+}
 
 interface ConnectOptions {
   address?: string;
@@ -14,13 +108,42 @@ export function connect(opt: ConnectOptions): IRC.Client {
   return client;
 }
 
-type privmsg = IRC.IRCMessage & { command: "MODE" };
-
 export interface Emote {
-  id: string;
+  id: number;
+  raw: string;
 }
 
-export interface Message extends IRC.Messages.PASS {}
+// function parseEmotes(msg: IRC.Messages.PRIVMSG) {
+//   type EmoteInfo = [id: number, first: number, last: number];
+//   const emoteTag = msg.tags?.emotes;
+//   const text = msg.params[1];
+//   if (!emoteTag) return;
+
+//   const emotes = emoteTag
+//     .split(",")
+//     .map(e => e.split(/:-/).map(p => +p) as EmoteInfo);
+
+//   let i = 0;
+//   const parts: (string | number)[] = [];
+//   for (const [id, first, last] of emotes) {
+//     if (first > i) {
+//       parts.push(text.substring(i, first));
+//     }
+//     parts.push(id);
+//     if (last < text.length) {
+//       parts.push(text.substring());
+//     }
+//   }
+// }
+
+export async function* emoteParser(
+  source: AsyncIterable<IRC.Messages.default>
+) {
+  for await (const m of source) {
+    if (m.command === "PRIVMSG") {
+    }
+  }
+}
 
 /*
 [Object: null prototype] {
@@ -99,7 +222,7 @@ export interface Message extends IRC.Messages.PASS {}
 
 type UUID = string;
 
-type PRIVMSG = IRC.Message<
+export type PRIVMSG = IRC.Message<
   "PRIVMSG",
   [channel: string, text: string],
   {
@@ -127,17 +250,17 @@ type PRIVMSG = IRC.Message<
   }
 >;
 
-type abc = IRC.Message<"abc", [], {}>;
-type abcd = IRC.Message<"", []>;
+// type abc = IRC.Message<"abc", [], {}>;
+// type abcd = IRC.Message<"", []>;
 
-type a = abcd["tags"];
-let m: abcd = {} as any;
+// type a = abcd["tags"];
+// let m: abcd = {} as any;
 
-type cmd = IRC.Commands<IRC.IRCMessage>;
+// type cmd = IRC.Commands<IRC.IRCMessage>;
 
-type c = cmd[411];
+// type c = cmd[411];
 
-let d = m.tags?.abc;
+// let d = m.tags?.abc;
 /*
 [Object: null prototype] {
   tags: [Object: null prototype] {
@@ -164,3 +287,28 @@ let d = m.tags?.abc;
   host: 'pianomandom.tmi.twitch.tv',
   command: 'PRIVMSG'
 }*/
+
+export namespace filter {
+  export type Filter<T extends IRC.Message = IRC.Message> = (msg: T) => boolean;
+
+  export function or(...filter: Filter[]): Filter {
+    return msg => filter.some(f => f(msg));
+  }
+
+  export function and(...filter: Filter[]): Filter {
+    return msg => filter.every(f => f(msg));
+  }
+
+  export const isCommand: Filter<PRIVMSG> = msg =>
+    msg.params[1].startsWith("!");
+}
+
+// console.log(
+//   parseEmotes(
+//     <PRIVMSG>(
+//       IRC.parse(
+//         "@badge-info=;badges=staff/1,bits/1000;bits=100;color=;display-name=ronni;emotes=;id=b34ccfc7-4977-403a-8a94-33c6bac34fb8;mod=0;room-id=1337;subscriber=0;tmi-sent-ts=1507246572675;turbo=1;user-id=1337;user-type=staff :ronni!ronni@ronni.tmi.twitch.tv PRIVMSG #ronni :cheer100"
+//       )
+//     )
+//   )
+// );

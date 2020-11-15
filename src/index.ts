@@ -5,10 +5,17 @@ export * from "./message.js";
 export * from "./client.js";
 export * as commands from "./commands.js";
 
+import { parseEmotes, filter, PRIVMSG } from "./twitch.js";
+
 async function handle(client: Client) {
   for await (const msg of client) {
     //@ts-ignore
-    console.log("Message:\n", msg, "\n");
+    //console.log("Message:\n", msg, "\n");
+
+    if (msg.command === "PRIVMSG") {
+      const parsed = parseEmotes((msg as unknown) as PRIVMSG);
+      console.log(parsed);
+    }
   }
 }
 
