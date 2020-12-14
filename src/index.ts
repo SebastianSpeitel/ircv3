@@ -19,26 +19,26 @@ async function handle(client: Client) {
   }
 }
 
-async function main() {
-  const client = await connect({ ssl: false });
+// async function main() {
+//   const client = await connect({ ssl: false });
 
-  const secrets = await import("./secret.js");
+//   const secrets = await import("./secret.js");
 
-  await authenticate(client, {
-    nick: secrets.NICK,
-    password: secrets.PASSWORD
-  });
+//   await authenticate(client, {
+//     nick: secrets.NICK,
+//     password: secrets.PASSWORD
+//   });
 
-  await requestCapability(client, "twitch.tv/tags");
-  await requestCapability(client, "twitch.tv/commands");
-  console.log("Caps acquired");
-  await join(client, "vorniy");
-  await join(client, "doktorfroid");
-  console.log("Channels joined");
+//   await requestCapability(client, "twitch.tv/tags");
+//   await requestCapability(client, "twitch.tv/commands");
+//   console.log("Caps acquired");
+//   await join(client, "vorniy");
+//   await join(client, "doktorfroid");
+//   console.log("Channels joined");
 
-  handle(client);
+//   handle(client);
 
-  //   say(client, "vorniy", "abc");
-}
+//   //   say(client, "vorniy", "abc");
+// }
 
-main();
+// main();

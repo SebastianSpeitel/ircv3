@@ -2,4 +2,9 @@ node_modules
 dist
 
 **/*.js
+**/*.tsbuildinfo
 .vscode
+.nyc_output
+coverage
+
+env.json
