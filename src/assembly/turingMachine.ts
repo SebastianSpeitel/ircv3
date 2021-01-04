@@ -56,6 +56,7 @@ export class TuringMachine<T extends TuringState> {
       const char = this.tape[this.head];
       const offset = this.state.next!(char, this.state);
       this.head += offset;
+      this.processed = this.head - 1;
     }
   }
 
