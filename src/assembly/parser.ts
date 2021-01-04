@@ -2,6 +2,8 @@ import { TuringMachine, TuringState, Tape } from "./turingMachine";
 export * from "./imports";
 import { printString } from "./imports";
 
+export declare function parsed(msg: Message): void;
+
 type char = u16;
 
 class ParserState extends TuringState {
@@ -35,6 +37,18 @@ function toString(arr: Array<u16>): string {
   }
   return str;
   // return String.fromCharCodes(changetype<Array<i32>>(arr));
+}
+
+export class Message {
+  command!: string;
+  params!: Array<string>;
+  tags!: Map<string, string>;
+  tagEntries!: Array<Array<string>>;
+  prefix: string | null;
+  servername: string | null;
+  nick: string | null;
+  user: string | null;
+  host: string | null;
 }
 
 function PreCommand(char: char, state: ParserState): i32 {
@@ -198,7 +212,32 @@ function End(char: char, state: ParserState): i32 {
     case CHAR_RETURN:
       return 1;
   }
-  // magic
+
+  const tagEntries = new Array<Array<string>>();
+  const keys = state.tags.keys();
+  for (let i: i32 = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const value = state.tags.get(key);
+    tagEntries.push([key, value]);
+  }
+
+  const msg: Message = {
+    command: toString(state.command),
+    params: state.params,
+    tags: state.tags,
+    tagEntries,
+    host: null,
+    nick: null,
+    prefix: null,
+    servername: null,
+    user: null
+  };
+  parsed(msg);
+
+  state.command.length = 0;
+  state.params = new Array<string>();
+  state.tags = new Map<string, string>();
+
   state.next = PreCommand;
   return 1;
 }
