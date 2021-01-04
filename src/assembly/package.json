@@ -1,6 +1,6 @@
 {
   "type": "module",
   "scripts": {
-    "asbuild": "asc ./parser.ts -o ./parser.wasm -t ./parser.wat -O3 --runtime=stub"
+    "asbuild": "asc ./parser.ts -o ./parser.wasm -t ./parser.wat --runtime=stub"
   }
 }
