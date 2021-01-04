@@ -72,6 +72,7 @@ function Command(char: char, state: ParserState): i32 {
 
 function Tag(char: char, state: ParserState): i32 {
   state.tagKey.length = 0;
+  state.tagValue.length = 0;
 
   state.next = TagKey;
   return 0;
