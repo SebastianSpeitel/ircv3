@@ -1,3 +1,5 @@
+import { parseMessage as parseMessageWASM } from '../wasm';
+
 export type ParseState = (
   str: string,
   i: number
@@ -15,7 +17,7 @@ export interface Message<
   C extends string = string,
   P extends string[] = string[],
   T extends Record<string, string> = Record<string, string>
-> {
+  > {
   command: C;
   params: P;
   prefix?: string;
@@ -26,7 +28,7 @@ export interface Message<
   tags?: T;
 }
 
-export function parseMessage(str: string) {
+export function _parseMessage(str: string) {
   const msg: Message = Object.create(null);
   msg.tags = Object.create(null);
   msg.params = [];
@@ -252,12 +254,19 @@ export function parseMessage(str: string) {
   return msg;
 }
 
+export function parseMessage(str: string): Message {
+  if (process.env.WASM !== 'false') {
+    return parseMessageWASM(str);
+  }
+  return _parseMessage(str);
+}
+
 export function ircFrameworkInterop(msg: Message) {
   return {
     command: "",
     nick: "",
     ...msg,
-    hostname: msg.servername ?? msg.host,
-    ident: msg.user ?? ""
+    hostname: msg.servername || msg.host,
+    ident: msg.user || ""
   };
 }

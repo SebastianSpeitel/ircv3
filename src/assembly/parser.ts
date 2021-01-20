@@ -2,7 +2,6 @@ import { TuringMachine, TuringState, Tape } from "./turingMachine";
 export * from "./imports";
 import { printString } from "./imports";
 
-export declare function parsed(msg: Message): void;
 
 type char = u16;
 
@@ -15,10 +14,19 @@ class ParserState extends TuringState {
   tagKey: Array<char> = new Array<char>();
   tagValue: Array<char> = new Array<char>();
   param: Array<char> = new Array<char>();
+  prefix: Array<char> = new Array<char>();
+  nick: Array<char> = new Array<char>();
+  user: Array<char> = new Array<char>();
+  host: Array<char> = new Array<char>();
 
-  constructor() {
+
+  constructor(private parser: Parser) {
     super();
     this.next = PreCommand;
+  }
+
+  onMessage(msg: Message): void {
+    this.parser.onMessage(msg)
   }
 }
 
@@ -29,8 +37,12 @@ const CHAR_SPACE: char = u16(" ".charCodeAt(0));
 const CHAR_RETURN: char = u16("\r".charCodeAt(0));
 const CHAR_NEWLINE: char = u16("\n".charCodeAt(0));
 const CHAR_EQUALS: char = u16("=".charCodeAt(0));
+const CHAR_EXCLAMATION: char = u16("!".charCodeAt(0));
+const CHAR_PERIOD: char = u16(".".charCodeAt(0));
 
 function toString(arr: Array<u16>): string {
+  //@ts-ignore
+  return String.UTF16.decodeUnsafe(arr.dataStart, arr.length * 2);
   let str: string = "";
   for (let i: i32 = 0; i < arr.length; i++) {
     str += String.fromCharCode(i32(arr[i]));
@@ -39,11 +51,17 @@ function toString(arr: Array<u16>): string {
   // return String.fromCharCodes(changetype<Array<i32>>(arr));
 }
 
+@unmanaged
+export class TagEntry {
+  key!: string
+  value!: string
+}
+
 export class Message {
   command!: string;
   params!: Array<string>;
   tags!: Map<string, string>;
-  tagEntries!: Array<Array<string>>;
+  tagEntries!: Array<TagEntry>;
   prefix: string | null;
   servername: string | null;
   nick: string | null;
@@ -57,9 +75,9 @@ function PreCommand(char: char, state: ParserState): i32 {
       state.next = Tag;
       return 1;
 
-    // case CHAR_COLON:
-    //   state.next = Prefix;
-    //   return 1;
+    case CHAR_COLON:
+      state.next = Prefix;
+      return 1;
 
     case CHAR_SPACE:
       return 1;
@@ -133,9 +151,6 @@ function TagValue(char: char, state: ParserState): i32 {
       const value = toString(state.tagValue);
       state.tags.set(key, value);
 
-      printString(key);
-      printString(value);
-
       if (char === CHAR_SEMICOLON) {
         state.next = Tag;
         return 1;
@@ -156,7 +171,80 @@ function TagValue(char: char, state: ParserState): i32 {
   return 1;
 }
 
-//TODO: Prefix zeug
+function Prefix(char: char, state: ParserState): i32 {
+  state.prefix.length = 0;
+  state.nick.length = 0;
+
+  state.next = Nick;
+  return 0;
+}
+
+function Nick(char: char, state: ParserState): i32 {
+
+  switch (char) {
+    case CHAR_SPACE:
+      state.next = PreCommand;
+      return 1;
+
+    case CHAR_PERIOD:
+      state.host = state.host.concat(state.nick);
+      state.nick.length = 0;
+      state.next = Host;
+      return 0;
+
+    case CHAR_RETURN:
+      state.next = End;
+      return 0;
+
+    case CHAR_AT:
+      state.next = Host;
+      return 1;
+
+    case CHAR_EXCLAMATION:
+      state.next = User;
+      return 1;
+  }
+
+  state.prefix.push(char);
+  state.nick.push(char);
+  return 1;
+}
+
+function User(char: char, state: ParserState): i32 {
+  switch (char) {
+    case CHAR_SPACE:
+      state.next = PreCommand;
+      return 1;
+
+    case CHAR_AT:
+      state.next = Host;
+      return 1;
+
+    case CHAR_RETURN:
+      state.next = End;
+      return 0;
+  }
+
+  state.prefix.push(char);
+  state.user.push(char);
+  return 1;
+}
+
+function Host(char: char, state: ParserState): i32 {
+  switch (char) {
+    case CHAR_SPACE:
+      state.next = PreCommand;
+      return 1;
+
+    case CHAR_RETURN:
+      state.next = End;
+      return 0;
+  }
+
+  state.prefix.push(char);
+  state.host.push(char);
+  return 1;
+}
 
 function Params(char: char, state: ParserState): i32 {
   state.param.length = 0;
@@ -213,12 +301,12 @@ function End(char: char, state: ParserState): i32 {
       return 1;
   }
 
-  const tagEntries = new Array<Array<string>>();
+  const tagEntries = new Array<TagEntry>();
   const keys = state.tags.keys();
   for (let i: i32 = 0; i < keys.length; i++) {
     const key = keys[i];
     const value = state.tags.get(key);
-    tagEntries.push([key, value]);
+    tagEntries.push({ key, value });
   }
 
   const msg: Message = {
@@ -226,13 +314,13 @@ function End(char: char, state: ParserState): i32 {
     params: state.params,
     tags: state.tags,
     tagEntries,
-    host: null,
-    nick: null,
-    prefix: null,
-    servername: null,
-    user: null
+    host: toString(state.host),
+    nick: toString(state.nick),
+    prefix: toString(state.prefix),
+    servername: toString(state.host),
+    user: toString(state.user)
   };
-  parsed(msg);
+  state.onMessage(msg);
 
   state.command.length = 0;
   state.params = new Array<string>();
@@ -242,10 +330,16 @@ function End(char: char, state: ParserState): i32 {
   return 1;
 }
 
-export const Tape_ID = idof<Tape>();
-
 export class Parser extends TuringMachine<ParserState> {
+  public messages: Array<Message>;
+
   constructor(length: i32) {
-    super(length, new ParserState());
+    super(length, null);
+    this.messages = new Array<Message>();
+    this.state = new ParserState(this);
+  }
+
+  public onMessage(msg: Message): void {
+    this.messages.push(msg);
   }
 }

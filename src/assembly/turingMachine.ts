@@ -9,12 +9,12 @@ export type Tape = Uint16Array;
 export class TuringMachine<T extends TuringState> {
   private tape: Tape;
   private head: i32 = 0;
-  private state: T;
+  protected state: T | null;
 
   private processed: i32 = 0;
   private end: i32 = 0;
 
-  constructor(private length: i32, rootState: T) {
+  constructor(private length: i32, rootState: T | null = null) {
     this.tape = new Uint16Array(this.length);
     this.state = rootState;
   }
@@ -54,7 +54,7 @@ export class TuringMachine<T extends TuringState> {
   run(): void {
     while (this.head < this.end) {
       const char = this.tape[this.head];
-      const offset = this.state.next!(char, this.state);
+      const offset = this.state!.next!(char, this.state!);
       this.head += offset;
       this.processed = this.head - 1;
     }
